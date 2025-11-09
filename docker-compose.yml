@@ -23,11 +23,14 @@ services:
       - "4000:4000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/creatus_car
-      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
-      - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET:-jwt-secret-key-999}
+      - NODE_ENV=${NODE_ENV:-development}
       - LINE_NOTIFY_TOKEN=${LINE_NOTIFY_TOKEN:-}
       - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}
       - GOOGLE_SHEETS_SPREADSHEET_ID=${GOOGLE_SHEETS_SPREADSHEET_ID:-}
+      - SA_EMPLOYEE_ID=${SA_EMPLOYEE_ID:-SA001}
+      - SA_PASSWORD=${SA_PASSWORD:-Creatus@123}
+    command: ["pnpm", "dev"]
     depends_on:
       db:
         condition: service_healthy
@@ -41,7 +44,9 @@ services:
     ports:
       - "3000:3000"
     environment:
+      # - NODE_ENV=${NODE_ENV:-development}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
+    # command: ["pnpm", "dev"]
     depends_on:
       - api
 

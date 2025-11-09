@@ -1,4 +1,4 @@
-# 🚀 Setup Guide
+<!-- # 🚀 Setup Guide
 
 ## Quick Start with Docker
 
@@ -10,7 +10,7 @@
 
 2. **Create environment file**
    ```bash
-   cp api/.env.example api/.env
+   cp .env.example .env
    # Edit .env with your configuration
    ```
 
@@ -19,13 +19,9 @@
    docker-compose up -d
    ```
 
-4. **Run database migrations and seed SA user**
+4. **Run database migrations**
    ```bash
-   # Run migrations
    docker-compose exec api npm run db:migrate
-   
-   # Seed Super Admin user
-   docker-compose exec api npm run db:seed
    ```
 
 5. **Access the application**
@@ -35,21 +31,22 @@
 
 ## Initial Setup Steps
 
-### 1. Super Admin (SA) Access
+### 1. Create Super Admin User
 
-The system comes with a default Super Admin account. You can log in with:
-- Employee ID: SA001 (or value from SA_EMPLOYEE_ID in .env)
-- Password: Set in SA_PASSWORD in .env
+After starting the database, you need to manually create a Super Admin user in the database:
 
-⚠️ Important: Change these credentials in production!
-
-You can modify SA credentials by:
-1. Setting environment variables before starting:
-   ```
-   SA_EMPLOYEE_ID=your_custom_id
-   SA_PASSWORD=your_secure_password
-   ```
-2. Or updating `.env` file with your values
+```sql
+INSERT INTO users (id, name, employee_id, password, role, created_at, updated_at)
+VALUES (
+  gen_random_uuid(),
+  'Admin User',
+  'ADMIN001',
+  '$2b$10$Creatus777', -- Use bcrypt to hash a password
+  'SUPER_ADMIN',
+  NOW(),
+  NOW()
+);
+```
 
 Or use the API after creating the first user manually:
 
@@ -141,4 +138,4 @@ npm run db:studio    # Open Drizzle Studio (DB GUI)
 - Verify service account has access to spreadsheet
 - Check credentials JSON format
 - System will skip saving if credentials are missing (won't error)
-
+ -->
