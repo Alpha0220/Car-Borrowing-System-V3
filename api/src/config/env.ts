@@ -12,6 +12,6 @@ export const env = {
   googleSheetsSpreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '',
   nodeEnv: process.env.NODE_ENV || 'development',
   saEmployeeId: process.env.SA_EMPLOYEE_ID || 'SA001',
-  saPassword: process.env.SA_PASSWORD || 'password',
+  saPassword: process.env.SA_PASSWORD || 'Creatus@123',
 };
 

@@ -24,5 +24,5 @@ RUN pnpm run build
 EXPOSE 4000
 
 # Start server
-CMD ["pnpm", "start"]
+CMD ["pnpm", "dev"]
 
