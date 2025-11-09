@@ -11,19 +11,29 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [tokens, setTokens] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     name: '',
     employeeId: '',
     role: 'EMPLOYEE' as 'SUPER_ADMIN' | 'MANAGER' | 'EMPLOYEE',
   });
+  const [isClientSide, setIsClientSide] = useState(false);
   const [error, setError] = useState('');
 
+ 
+
   useEffect(() => {
+    // if (!isClientSide) {
+    //   return;
+    // }
     const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
+    setTokens(token);
+    // if (!token) {
+    //   router.push('/login');
+    //   return;
+    // }
+    console.log('Token from localStorage:', token);
 
     const userStr = localStorage.getItem('user');
     if (userStr) {
@@ -37,6 +47,10 @@ export default function UsersPage() {
     fetchUsers();
   }, [router]);
 
+   useEffect(() => {
+    setIsClientSide(true);
+  }, []);
+
   const fetchUsers = async () => {
     try {
       const response = await api.get('/users');
@@ -49,13 +63,18 @@ export default function UsersPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    try {
     e.preventDefault();
     setError('');
 
-    try {
-      await api.post('/users', formData);
+      await api.post('/users', formData, {
+      headers: {
+        Authorization: `Bearer ${tokens}`, // ส่ง token ใน header
+      },
+    });
       setFormData({ name: '', employeeId: '', role: 'EMPLOYEE' });
       setShowForm(false);
+      setIsClientSide(true);
       fetchUsers();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create user');
@@ -71,6 +90,10 @@ export default function UsersPage() {
     );
   }
 
+  console.log('Rendered UsersPage with users:', users);
+  console.log('Current formData:', formData);
+  console.log('error', error);
+  console.log('token', localStorage.getItem('token'));
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />

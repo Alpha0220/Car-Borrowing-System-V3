@@ -21,10 +21,17 @@ export default function Navbar() {
     router.push('/login');
   };
 
+  const handleBackHome = () => {
+    router.push('/dashboard');
+  }
+
   return (
     <nav className="bg-blue-600 text-white shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
+          <button
+          className='p-2 bg-white'
+            onClick={handleBackHome}> <span className="text-sm text-black">กลับไปหน้าหลัก</span></button>
           <div className="flex items-center">
             <h1 className="text-xl font-bold">Creatus Car Service</h1>
           </div>
