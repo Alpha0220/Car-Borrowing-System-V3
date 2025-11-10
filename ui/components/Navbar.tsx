@@ -16,6 +16,7 @@ export default function Navbar() {
   }, []);
 
   const handleLogout = () => {
+    console.log('Logging out user');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     router.push('/login');
@@ -30,7 +31,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <button
-          className='p-2 bg-white'
+          className='p-2 bg-red-600'
             onClick={handleBackHome}> <span className="text-sm text-black">กลับไปหน้าหลัก</span></button>
           <div className="flex items-center">
             <h1 className="text-xl font-bold">Creatus Car Service</h1>

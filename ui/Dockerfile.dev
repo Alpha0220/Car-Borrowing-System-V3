@@ -1,0 +1,20 @@
+FROM node:20-alpine
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml* ./
+
+# Install dependencies
+RUN pnpm install
+
+EXPOSE 3000
+
+ENV PORT 3000
+ENV NODE_ENV development
+
+CMD ["pnpm", "dev"]
+
