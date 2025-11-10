@@ -17,7 +17,9 @@ services:
       retries: 5
 
   api:
-    build: ./api
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
     container_name: creatus_car_api
     ports:
       - "4000:4000"
@@ -39,14 +41,20 @@ services:
       - /app/node_modules
 
   ui:
-    build: ./ui
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.dev
     container_name: creatus_car_ui
     ports:
       - "3000:3000"
     environment:
-      # - NODE_ENV=${NODE_ENV:-development}
+      - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:4000
-    # command: ["pnpm", "dev"]
+    command: ["pnpm", "dev"]
+    volumes:
+      - ./ui:/app
+      - /app/node_modules
+      - /app/.next/cache
     depends_on:
       - api
 

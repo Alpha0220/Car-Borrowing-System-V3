@@ -1,0 +1,22 @@
+FROM node:20-alpine
+
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml* ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Expose port
+EXPOSE 4000
+
+# Start server in dev mode (tsx watch will compile on the fly)
+CMD ["pnpm", "dev"]
+
