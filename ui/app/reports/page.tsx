@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import api from '@/lib/api';
+import { getReports } from '@/lib/actions/borrow.action';
+import { getVehicles } from '@/lib/actions/vehicle.action';
+import { getUsers } from '@/lib/actions/user.action';
 import { Borrow, Vehicle, User } from '@/lib/types';
 
 export default function ReportsPage() {
@@ -39,19 +41,14 @@ export default function ReportsPage() {
 
   const fetchData = async () => {
     try {
-      const params = new URLSearchParams();
-      if (filters.status) params.append('status', filters.status);
-      if (filters.borrowDateFrom) params.append('borrowDateFrom', filters.borrowDateFrom);
-      if (filters.borrowDateTo) params.append('borrowDateTo', filters.borrowDateTo);
-
-      const [borrowsRes, vehiclesRes, usersRes] = await Promise.all([
-        api.get(`/borrows/reports?${params.toString()}`),
-        api.get('/vehicles'),
-        api.get('/users'),
+      const [borrowsData, vehiclesData, usersData] = await Promise.all([
+        getReports(filters),
+        getVehicles(),
+        getUsers(),
       ]);
-      setBorrows(borrowsRes.data);
-      setVehicles(vehiclesRes.data);
-      setUsers(usersRes.data);
+      setBorrows(borrowsData);
+      setVehicles(vehiclesData);
+      setUsers(usersData);
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {

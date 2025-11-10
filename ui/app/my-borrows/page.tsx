@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import api from '@/lib/api';
+import { getMyBorrows } from '@/lib/actions/borrow.action';
+import { getVehicles } from '@/lib/actions/vehicle.action';
+import { returnVehicle } from '@/lib/actions/borrow.action';
 import { Borrow, Vehicle } from '@/lib/types';
 
 export default function MyBorrowsPage() {
@@ -26,12 +28,12 @@ export default function MyBorrowsPage() {
 
   const fetchData = async () => {
     try {
-      const [borrowsRes, vehiclesRes] = await Promise.all([
-        api.get('/borrows/my'),
-        api.get('/vehicles'),
+      const [borrowsData, vehiclesData] = await Promise.all([
+        getMyBorrows(),
+        getVehicles(),
       ]);
-      setBorrows(borrowsRes.data);
-      setVehicles(vehiclesRes.data);
+      setBorrows(borrowsData);
+      setVehicles(vehiclesData);
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {
@@ -47,12 +49,12 @@ export default function MyBorrowsPage() {
 
     setReturningId(borrowId);
     try {
-      await api.patch(`/borrows/${borrowId}/return`, { endMileage: parseInt(endMileage) });
+      await returnVehicle(borrowId, parseInt(endMileage));
       setEndMileage('');
       setReturningId(null);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to return vehicle');
+      alert(err.message || 'Failed to return vehicle');
     } finally {
       setReturningId(null);
     }

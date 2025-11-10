@@ -9,9 +9,6 @@ const userRepo = new UserRepository();
 
 export class AuthController {
   async register(req: Request, res: Response) {
-    console.log(env.saEmployeeId, env.saPassword, "register");
-    // log to terminal
-    console.log(env.saEmployeeId, env.saPassword, "register");
     try {
       const validated = registerSchema.parse(req.body);
       const { employeeId, password } = validated;
@@ -59,8 +56,9 @@ export class AuthController {
       }
 
       const signOptions: SignOptions = {
-        expiresIn: parseInt(env.jwtExpiresIn as string, 10),
+        expiresIn: env.jwtExpiresIn as SignOptions['expiresIn'],
       };
+
       const token = jwt.sign(
         {
           id: user.id,
@@ -124,11 +122,11 @@ export class AuthController {
           return res.status(401).json({ error: 'Invalid SA credentials' });
         }
 
-      console.log ("create sa user");
+      
   
         // สร้าง JWT token สำหรับ SA
         const signOptions: SignOptions = {
-          expiresIn: parseInt(env.jwtExpiresIn as string, 10),
+          expiresIn: env.jwtExpiresIn as any,
         };
         const token = jwt.sign(
           {
@@ -163,7 +161,7 @@ export class AuthController {
       }
   
       const signOptions: SignOptions = {
-        expiresIn: parseInt(env.jwtExpiresIn as string, 10),
+        expiresIn: env.jwtExpiresIn as SignOptions['expiresIn'],
       };
       const token = jwt.sign(
         {

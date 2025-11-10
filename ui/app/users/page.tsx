@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import api from '@/lib/api';
+import { createUser, getUsers } from '@/lib/actions/user.action';
 import { User } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function UsersPage() {
   const router = useRouter();
@@ -12,7 +12,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [tokens, setTokens] = useState<string | null>(null);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     employeeId: '',
@@ -21,7 +21,7 @@ export default function UsersPage() {
   const [isClientSide, setIsClientSide] = useState(false);
   const [error, setError] = useState('');
 
- 
+
 
   useEffect(() => {
     // if (!isClientSide) {
@@ -29,11 +29,10 @@ export default function UsersPage() {
     // }
     const token = localStorage.getItem('token');
     setTokens(token);
-    // if (!token) {
-    //   router.push('/login');
-    //   return;
-    // }
-    console.log('Token from localStorage:', token);
+    if (!token) {
+      router.push('/login');
+      return;
+    }
 
     const userStr = localStorage.getItem('user');
     if (userStr) {
@@ -47,14 +46,14 @@ export default function UsersPage() {
     fetchUsers();
   }, [router]);
 
-   useEffect(() => {
+  useEffect(() => {
     setIsClientSide(true);
   }, []);
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get('/users');
-      setUsers(response.data);
+      const data = await getUsers();
+      setUsers(data);
     } catch (err) {
       console.error('Failed to fetch users:', err);
     } finally {
@@ -64,14 +63,10 @@ export default function UsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     try {
-    e.preventDefault();
-    setError('');
+      e.preventDefault();
+      setError('');
 
-      await api.post('/users', formData, {
-      headers: {
-        Authorization: `Bearer ${tokens}`, // ส่ง token ใน header
-      },
-    });
+      await createUser(formData);
       setFormData({ name: '', employeeId: '', role: 'EMPLOYEE' });
       setShowForm(false);
       setIsClientSide(true);
@@ -90,16 +85,12 @@ export default function UsersPage() {
     );
   }
 
-  console.log('Rendered UsersPage with users:', users);
-  console.log('Current formData:', formData);
-  console.log('error', error);
-  console.log('token', localStorage.getItem('token'));
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-bold">จัดการผู้ใช้</h2>
+          <h2 className="text-3xl text-gray-600 font-bold">จัดการผู้ใช้</h2>
           <button
             onClick={() => setShowForm(!showForm)}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"

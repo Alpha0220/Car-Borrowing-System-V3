@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '@/lib/api';
+import { register } from '@/lib/actions/auth.action';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -30,13 +30,13 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await api.post('/auth/register', { employeeId, password });
+      await register(employeeId, password);
       setSuccess(true);
       setTimeout(() => {
         router.push('/login');
       }, 2000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed');
+      setError(err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import api from '@/lib/api';
+import { getPendingBorrows } from '@/lib/actions/borrow.action';
+import { getVehicles } from '@/lib/actions/vehicle.action';
+import { getUsers } from '@/lib/actions/user.action';
+import { approveBorrow } from '@/lib/actions/borrow.action';
 import { Borrow, Vehicle, User } from '@/lib/types';
 
 export default function ApprovalsPage() {
@@ -37,14 +40,14 @@ export default function ApprovalsPage() {
 
   const fetchData = async () => {
     try {
-      const [borrowsRes, vehiclesRes, usersRes] = await Promise.all([
-        api.get('/borrows/pending'),
-        api.get('/vehicles'),
-        api.get('/users'),
+      const [borrowsData, vehiclesData, usersData] = await Promise.all([
+        getPendingBorrows(),
+        getVehicles(),
+        getUsers(),
       ]);
-      setBorrows(borrowsRes.data);
-      setVehicles(vehiclesRes.data);
-      setUsers(usersRes.data);
+      setBorrows(borrowsData);
+      setVehicles(vehiclesData);
+      setUsers(usersData);
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {
@@ -60,7 +63,7 @@ export default function ApprovalsPage() {
 
     setApprovingId(borrowId);
     try {
-      await api.patch(`/borrows/${borrowId}/approve`, {
+      await approveBorrow(borrowId, {
         startMileage: parseInt(startMileage),
         fuelUsedLiters: fuelUsedLiters ? parseFloat(fuelUsedLiters) : undefined,
       });
@@ -69,7 +72,7 @@ export default function ApprovalsPage() {
       setApprovingId(null);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to approve borrow');
+      alert(err.message || 'Failed to approve borrow');
     } finally {
       setApprovingId(null);
     }

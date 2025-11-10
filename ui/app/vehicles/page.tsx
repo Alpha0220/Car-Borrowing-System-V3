@@ -3,13 +3,20 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import api from '@/lib/api';
+import { getVehicles, createVehicle } from '@/lib/actions/vehicle.action';
 import { Vehicle } from '@/lib/types';
 
 export default function VehiclesPage() {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    licensePlate: '',
+    easypassBalance: '',
+  });
+  const [error, setError] = useState('');
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -18,19 +25,45 @@ export default function VehiclesPage() {
       return;
     }
 
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      setUser(JSON.parse(userStr));
+    }
+
     fetchVehicles();
   }, [router]);
 
   const fetchVehicles = async () => {
     try {
-      const response = await api.get('/vehicles');
-      setVehicles(response.data);
+      const data = await getVehicles();
+      setVehicles(data);
     } catch (err) {
       console.error('Failed to fetch vehicles:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    try {
+      await createVehicle({
+        licensePlate: formData.licensePlate,
+        easypassBalance: formData.easypassBalance
+          ? parseFloat(formData.easypassBalance)
+          : undefined,
+      });
+      setFormData({ licensePlate: '', easypassBalance: '' });
+      setShowForm(false);
+      fetchVehicles();
+    } catch (err: any) {
+      setError(err.message || 'Failed to create vehicle');
+    }
+  };
+
+  const isManager = user?.role === 'MANAGER' || user?.role === 'SUPER_ADMIN';
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -71,7 +104,70 @@ export default function VehiclesPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h2 className="text-3xl font-bold mb-6">สถานะรถและเงิน Easy Pass</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-3xl font-bold">สถานะรถและเงิน Easy Pass</h2>
+          {isManager && (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            >
+              {showForm ? 'ยกเลิก' : 'เพิ่มรถ'}
+            </button>
+          )}
+        </div>
+
+        {showForm && isManager && (
+          <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h3 className="text-lg font-semibold mb-4">เพิ่มรถใหม่</h3>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ทะเบียนรถ *
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={formData.licensePlate}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      licensePlate: e.target.value.toUpperCase(),
+                    })
+                  }
+                  placeholder="เช่น กข 1234"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  เงิน Easy Pass (บาท) (ไม่บังคับ)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={formData.easypassBalance}
+                  onChange={(e) =>
+                    setFormData({ ...formData, easypassBalance: e.target.value })
+                  }
+                  placeholder="เช่น 500.00"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700"
+              >
+                เพิ่มรถ
+              </button>
+            </form>
+          </div>
+        )}
 
         {vehicles.length === 0 ? (
           <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-600">

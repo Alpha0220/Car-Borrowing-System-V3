@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import api from '@/lib/api';
+import { getVehicles } from '@/lib/actions/vehicle.action';
+import { createBorrow } from '@/lib/actions/borrow.action';
 import { Vehicle } from '@/lib/types';
 
 export default function BorrowPage() {
@@ -26,8 +27,8 @@ export default function BorrowPage() {
 
   const fetchVehicles = async () => {
     try {
-      const response = await api.get('/vehicles');
-      setVehicles(response.data);
+      const data = await getVehicles();
+      setVehicles(data);
     } catch (err) {
       console.error('Failed to fetch vehicles:', err);
     }
@@ -40,14 +41,14 @@ export default function BorrowPage() {
     setLoading(true);
 
     try {
-      await api.post('/borrows', { licensePlate });
+      await createBorrow(licensePlate);
       setSuccess(true);
       setLicensePlate('');
       setTimeout(() => {
         router.push('/my-borrows');
       }, 2000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create borrow request');
+      setError(err.message || 'Failed to create borrow request');
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 
@@ -18,6 +18,7 @@ export const verifyJWT = (req: AuthRequest, res: Response, next: NextFunction) =
   }
 
   const token = authHeader.substring(7);
+  
 
   try {
     const decoded = jwt.verify(token, env.jwtSecret) as {
@@ -25,6 +26,10 @@ export const verifyJWT = (req: AuthRequest, res: Response, next: NextFunction) =
       employeeId: string;
       role: 'SUPER_ADMIN' | 'MANAGER' | 'EMPLOYEE';
     };
+
+    if (!decoded) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid token111',token: token });
+    }
 
     req.user = decoded;
     next();
