@@ -5,7 +5,6 @@ const PORT = env.port;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  // console.log(`📊 Environment: ${env.nodeEnv}`);
-  console.log(`📊 Environment: tesefd;k;lksad';flaksd'flkds`);
+  console.log(`📊 Environment: ${env.nodeEnv}`);
 });
 

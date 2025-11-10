@@ -1,9 +1,9 @@
-import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import { Request, Response } from 'express';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
 import { UserRepository } from '../repositories/user.repository';
-import { registerSchema, loginSchema } from '../schemas/auth.schema';
+import { loginSchema, registerSchema } from '../schemas/auth.schema';
 
 const userRepo = new UserRepository();
 
@@ -103,7 +103,7 @@ export class AuthController {
         // ถ้าไม่มี user SA ในฐานข้อมูลให้สร้างใหม่
         if (!saUser) {
           console.log('SA user not found, creating new SA user...');
-          
+      
           // Hash รหัสผ่าน
           const hashedPassword = await bcrypt.hash(env.saPassword, 10);
   
@@ -123,6 +123,8 @@ export class AuthController {
         if (!isValid) {
           return res.status(401).json({ error: 'Invalid SA credentials' });
         }
+
+      console.log ("create sa user");
   
         // สร้าง JWT token สำหรับ SA
         const signOptions: SignOptions = {
