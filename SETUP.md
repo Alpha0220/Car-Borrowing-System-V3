@@ -58,14 +58,16 @@ curl -X POST http://localhost:4000/api/auth/register \
   -d '{"employeeId": "ADMIN001", "password": "yourpassword"}'
 ```
 
-### 2. Configure LINE Notify
+### 2. Configure LINE Messaging API
 
-1. Go to https://notify-bot.line.me/
-2. Create a LINE Notify account
-3. Generate a token
-4. Add token to `.env`:
+1. ไปที่ https://developers.line.biz/console/
+2. สร้าง LINE Official Account (หรือเลือกบัญชีที่มีอยู่)
+3. เปิดใช้งาน Messaging API และสร้าง Channel
+4. คัดลอก Channel access token และ Channel secret
+5. เพิ่มค่าใน `.env`:
    ```
-   LINE_NOTIFY_TOKEN=your-token-here
+   LINE_CHANNEL_ACCESS_TOKEN=your-access-token
+   LINE_CHANNEL_SECRET=your-channel-secret
    ```
 
 ### 3. Configure Google Sheets
@@ -122,17 +124,17 @@ npm run db:studio    # Open Drizzle Studio (DB GUI)
 - Change ports in `docker-compose.yml` or stop conflicting services
 
 ### Database connection failed
-- Ensure PostgreSQL container is running: `docker-compose ps`
-- Check DATABASE_URL in `.env`
+- Ensure PostgreSQL container is running (ถ้าใช้ Docker): `docker-compose ps`
+- ตรวจสอบ `SUPABASE_DB_URL` ใน `.env` (หรือค่าจากแดชบอร์ดของ Supabase)
 
 ### Migration errors
 - Ensure database is running
 - Check migration files exist in `api/drizzle/migrations/`
 - Try resetting: `docker-compose down -v` (⚠️ deletes data)
 
-### LINE Notify not working
-- Check token is valid
-- System will skip notifications if token is missing (won't error)
+### LINE Messaging API not working
+- ตรวจสอบว่าตั้งค่า LINE_CHANNEL_ACCESS_TOKEN และ LINE_CHANNEL_SECRET ครบหรือไม่
+- ระบบจะข้ามการส่งแจ้งเตือนหากไม่มี token (จะไม่เกิด error)
 
 ### Google Sheets not saving
 - Verify service account has access to spreadsheet

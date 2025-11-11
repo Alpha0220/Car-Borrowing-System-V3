@@ -7,7 +7,7 @@
 - ✅ **Authentication & Authorization**: JWT-based authentication with role-based access control
 - ✅ **Vehicle Management**: จัดการข้อมูลรถและสถานะ (Available/In Use/Broken)
 - ✅ **Borrowing System**: ระบบขอเบิกรถ, อนุมัติ, และคืนรถ
-- ✅ **Notifications**: แจ้งเตือนผ่าน LINE Notify API
+- ✅ **Notifications**: แจ้งเตือนผ่าน LINE Messaging API
 - ✅ **Google Sheets Integration**: บันทึกข้อมูลการเบิกรถอัตโนมัติ
 - ✅ **Reports**: ระบบรายงานพร้อมตัวกรอง
 - ✅ **Real-time Updates**: แจ้งเตือนทันทีเมื่อมีการเปลี่ยนแปลง
@@ -22,12 +22,12 @@
 ### Backend
 - **Express.js** + **TypeScript**
 - **Drizzle ORM** (แทน Prisma)
-- **PostgreSQL**
+- **Supabase Postgres**
 - **JWT** Authentication
 - **bcrypt** สำหรับ hash password
 
 ### Integrations
-- **LINE Notify API** - แจ้งเตือน
+- **LINE Messaging API** - แจ้งเตือน
 - **Google Sheets API** - บันทึกข้อมูล
 
 ### Infrastructure
@@ -75,14 +75,17 @@ creatus-car/
 สร้างไฟล์ `.env` ใน root directory:
 
 ```env
-# Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/creatus_car
+# Database (Supabase)
+SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:5432/creatus_car
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key-change-in-production
 
-# LINE Notify
-LINE_NOTIFY_TOKEN=your-line-notify-token
+# LINE Messaging API
+LINE_CHANNEL_ACCESS_TOKEN=your-line-channel-access-token
+LINE_CHANNEL_SECRET=your-line-channel-secret
 
 # Google Sheets
 GOOGLE_SHEETS_CREDENTIALS={"type":"service_account",...}
@@ -90,6 +93,8 @@ GOOGLE_SHEETS_SPREADSHEET_ID=your-spreadsheet-id
 
 # Next.js
 NEXT_PUBLIC_API_URL=http://localhost:4000
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
 ### Running with Docker
@@ -155,7 +160,7 @@ npm run db:migrate   # Run migrations
 1. **Super Admin** เพิ่มข้อมูลพนักงาน (ชื่อ, รหัสพนักงาน, บทบาท)
 2. **Employee** สมัครสมาชิกด้วยรหัสพนักงานที่ได้รับ
 3. **Employee** ล็อกอินและขอเบิกรถ (กรอกทะเบียนรถ)
-4. ระบบส่งแจ้งเตือน LINE ไปยัง Manager
+4. ระบบส่งแจ้งเตือนผ่าน LINE Messaging API ไปยัง Manager
 5. **Manager** อนุมัติคำขอ (กรอกเลขไมล์เริ่มต้น, น้ำมัน)
 6. **Employee** ใช้รถเสร็จ → คืนรถ (กรอกเลขไมล์คืน)
 7. ระบบบันทึกข้อมูลลง Google Sheets และส่งแจ้งเตือน
@@ -174,6 +179,7 @@ npm run db:migrate   # Run migrations
 ### Vehicles
 - `GET /api/vehicles` - ดูรายการรถ
 - `GET /api/vehicles/:id` - ดูข้อมูลรถ
+- `GET /api/vehicles/:id/summary` - ดูสรุปข้อมูลล่าสุดของรถ
 - `POST /api/vehicles` - เพิ่มรถ (Manager/Admin)
 - `PATCH /api/vehicles/:id` - อัปเดตรถ (Manager/Admin)
 
@@ -200,7 +206,7 @@ npm run db:migrate   # Run migrations
 ## 📝 Notes
 
 - ระบบใช้ Drizzle ORM แทน Prisma
-- LINE Notify token ต้องตั้งค่าใน environment variables
+- ต้องตั้งค่า LINE Messaging API channel access token ใน environment variables
 - Google Sheets credentials ต้องเป็น service account JSON
 - Database migrations ต้องรันก่อนใช้งานครั้งแรก
 
@@ -210,8 +216,8 @@ npm run db:migrate   # Run migrations
 - ตรวจสอบว่า PostgreSQL container ทำงานอยู่
 - ตรวจสอบ DATABASE_URL ใน environment variables
 
-### LINE Notify ไม่ทำงาน
-- ตรวจสอบ LINE_NOTIFY_TOKEN
+### LINE Messaging API ไม่ทำงาน
+- ตรวจสอบ LINE_CHANNEL_ACCESS_TOKEN และสิทธิ์การใช้งาน channel
 - ระบบจะข้ามการส่งแจ้งเตือนถ้าไม่มี token (ไม่ error)
 
 ### Google Sheets ไม่บันทึก

@@ -1,9 +1,11 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth';
+import { BorrowRepository } from '../repositories/borrow.repository';
 import { VehicleRepository } from '../repositories/vehicle.repository';
 import { createVehicleSchema, updateVehicleSchema } from '../schemas/vehicle.schema';
 
 const vehicleRepo = new VehicleRepository();
+const borrowRepo = new BorrowRepository();
 
 export class VehicleController {
   async getAll(req: AuthRequest, res: Response) {
@@ -26,6 +28,31 @@ export class VehicleController {
       res.json(vehicle);
     } catch (error) {
       console.error('Get vehicle error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getSummary(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const vehicle = await vehicleRepo.findById(id);
+
+      if (!vehicle) {
+        return res.status(404).json({ error: 'Vehicle not found' });
+      }
+
+      const latestBorrow = await borrowRepo.findLatestByVehicle(id);
+      const latestMileage =
+        latestBorrow?.endMileage ?? latestBorrow?.startMileage ?? null;
+
+      res.json({
+        vehicle,
+        latestBorrow,
+        latestMileage,
+        lastUpdatedAt: latestBorrow?.updatedAt ?? vehicle.updatedAt,
+      });
+    } catch (error) {
+      console.error('Get vehicle summary error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

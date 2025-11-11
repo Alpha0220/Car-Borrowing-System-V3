@@ -1,34 +1,38 @@
 'use client';
 
-import Navbar from '@/components/Navbar';
+import AppShell from '@/components/AppShell';
 import { createUser, getUsers } from '@/lib/actions/user.action';
-import { User } from '@/lib/types';
+import type { User, UserRole } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+type UserFormState = {
+  name: string;
+  employeeId: string;
+  role: UserRole;
+};
+
+const roleLabels: Record<UserRole, string> = {
+  SUPER_ADMIN: 'ผู้ดูแลระบบ',
+  MANAGER: 'ผู้จัดการ',
+  EMPLOYEE: 'พนักงาน',
+};
 
 export default function UsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [tokens, setTokens] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState({
+  const [formState, setFormState] = useState<UserFormState>({
     name: '',
     employeeId: '',
-    role: 'EMPLOYEE' as 'SUPER_ADMIN' | 'MANAGER' | 'EMPLOYEE',
+    role: 'EMPLOYEE',
   });
-  const [isClientSide, setIsClientSide] = useState(false);
-  const [error, setError] = useState('');
-
-
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // if (!isClientSide) {
-    //   return;
-    // }
     const token = localStorage.getItem('token');
-    setTokens(token);
     if (!token) {
       router.push('/login');
       return;
@@ -36,148 +40,161 @@ export default function UsersPage() {
 
     const userStr = localStorage.getItem('user');
     if (userStr) {
-      const user = JSON.parse(userStr);
-      if (user.role !== 'SUPER_ADMIN') {
+      const parsed: User = JSON.parse(userStr);
+      if (parsed.role !== 'SUPER_ADMIN') {
         router.push('/dashboard');
         return;
       }
     }
 
-    fetchUsers();
+    getUsers()
+      .then((data) => setUsers(data))
+      .catch((error) => {
+        console.error('Failed to fetch users:', error);
+        setPageError('ไม่สามารถโหลดข้อมูลผู้ใช้ได้ กรุณาลองใหม่อีกครั้ง');
+      })
+      .finally(() => setLoading(false));
   }, [router]);
 
-  useEffect(() => {
-    setIsClientSide(true);
-  }, []);
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setPageError(null);
 
-  const fetchUsers = async () => {
     try {
-      const data = await getUsers();
-      setUsers(data);
-    } catch (err) {
-      console.error('Failed to fetch users:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    try {
-      e.preventDefault();
-      setError('');
-
-      await createUser(formData);
-      setFormData({ name: '', employeeId: '', role: 'EMPLOYEE' });
+      await createUser(formState);
+      setFormState({ name: '', employeeId: '', role: 'EMPLOYEE' });
       setShowForm(false);
-      setIsClientSide(true);
-      fetchUsers();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create user');
+      const refreshedUsers = await getUsers();
+      setUsers(refreshedUsers);
+    } catch (error: any) {
+      setPageError(error.response?.data?.error || 'ไม่สามารถเพิ่มผู้ใช้ใหม่ได้ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 py-8">Loading...</div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl text-gray-600 font-bold">จัดการผู้ใช้</h2>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            {showForm ? 'ยกเลิก' : 'เพิ่มผู้ใช้'}
-          </button>
+    <AppShell
+      title="จัดการผู้ใช้"
+      description="เพิ่ม แก้ไข และตรวจสอบรายชื่อผู้ใช้ที่มีสิทธิ์เข้าใช้งานระบบ"
+      actions={
+        <button
+          type="button"
+          onClick={() => setShowForm((prev) => !prev)}
+          className="rounded-xl border border-brand-400 bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2"
+        >
+          {showForm ? 'ปิดฟอร์มเพิ่มผู้ใช้' : 'เพิ่มผู้ใช้ใหม่'}
+        </button>
+      }
+    >
+      {loading ? (
+        <div className="rounded-3xl border border-dashed border-brand-200 bg-white/80 p-12 text-center text-brand-500">
+          กำลังโหลดข้อมูลผู้ใช้...
         </div>
+      ) : (
+        <div className="space-y-6">
+          {pageError && (
+            <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {pageError}
+            </div>
+          )}
 
-        {showForm && (
-          <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h3 className="text-lg font-semibold mb-4">เพิ่มผู้ใช้ใหม่</h3>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-                {error}
+          {showForm && (
+            <form
+              onSubmit={handleSubmit}
+              className="rounded-3xl border border-brand-100 bg-white/90 p-6 shadow-sm backdrop-blur"
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label htmlFor="name" className="block text-sm font-semibold text-brand-800">
+                    ชื่อ-นามสกุล
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    required
+                    value={formState.name}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, name: event.target.value }))
+                    }
+                    className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="employeeId" className="block text-sm font-semibold text-brand-800">
+                    รหัสพนักงาน
+                  </label>
+                  <input
+                    id="employeeId"
+                    type="text"
+                    required
+                    value={formState.employeeId}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, employeeId: event.target.value }))
+                    }
+                    className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="role" className="block text-sm font-semibold text-brand-800">
+                    บทบาทในระบบ
+                  </label>
+                  <select
+                    id="role"
+                    value={formState.role}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, role: event.target.value as UserRole }))
+                    }
+                    className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-sm text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  >
+                    <option value="EMPLOYEE">พนักงาน</option>
+                    <option value="MANAGER">ผู้จัดการ</option>
+                    <option value="SUPER_ADMIN">ผู้ดูแลระบบ</option>
+                  </select>
+                </div>
               </div>
-            )}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อ</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">รหัสพนักงาน</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  value={formData.employeeId}
-                  onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">บทบาท</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-200"
                 >
-                  <option value="EMPLOYEE">พนักงาน</option>
-                  <option value="MANAGER">ผู้จัดการ</option>
-                  <option value="SUPER_ADMIN">ผู้ดูแลระบบ</option>
-                </select>
+                  {submitting ? 'กำลังบันทึก...' : 'บันทึกผู้ใช้ใหม่'}
+                </button>
               </div>
-              <button
-                type="submit"
-                className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700"
-              >
-                เพิ่มผู้ใช้
-              </button>
             </form>
-          </div>
-        )}
+          )}
 
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ชื่อ
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  รหัสพนักงาน
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  บทบาท
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
-                <tr key={user.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.employeeId}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.role}</td>
+          <div className="overflow-hidden rounded-3xl border border-brand-100 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-brand-100 text-sm">
+              <thead className="bg-brand-50/70">
+                <tr>
+                  <th className="px-6 py-3 text-left font-semibold text-brand-700">ชื่อ</th>
+                  <th className="px-6 py-3 text-left font-semibold text-brand-700">รหัสพนักงาน</th>
+                  <th className="px-6 py-3 text-left font-semibold text-brand-700">บทบาท</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-brand-100">
+                {users.map((user) => (
+                  <tr key={user.id} className="hover:bg-brand-50/40">
+                    <td className="px-6 py-4 text-brand-900">{user.name}</td>
+                    <td className="px-6 py-4 text-brand-700">{user.employeeId}</td>
+                    <td className="px-6 py-4">
+                      <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-800">
+                        {roleLabels[user.role]}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </AppShell>
   );
 }
+
 

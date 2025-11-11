@@ -1,24 +1,42 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
+import AppShell from '@/components/AppShell';
 import { getReports } from '@/lib/actions/borrow.action';
-import { getVehicles } from '@/lib/actions/vehicle.action';
 import { getUsers } from '@/lib/actions/user.action';
-import { Borrow, Vehicle, User } from '@/lib/types';
+import { getVehicles } from '@/lib/actions/vehicle.action';
+import type { Borrow, User, Vehicle } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+
+type ReportFilters = {
+  status: string;
+  borrowDateFrom: string;
+  borrowDateTo: string;
+};
+
+const statusMeta: Record<
+  Borrow['status'],
+  { label: string; badgeClass: string }
+> = {
+  PENDING: { label: 'รออนุมัติ', badgeClass: 'bg-yellow-100 text-yellow-800' },
+  APPROVED: { label: 'อนุมัติแล้ว', badgeClass: 'bg-blue-100 text-blue-800' },
+  IN_USE: { label: 'กำลังใช้งาน', badgeClass: 'bg-brand-100 text-brand-800' },
+  RETURNED: { label: 'คืนแล้ว', badgeClass: 'bg-green-100 text-green-800' },
+};
 
 export default function ReportsPage() {
   const router = useRouter();
   const [borrows, setBorrows] = useState<Borrow[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [filters, setFilters] = useState<ReportFilters>({
     status: '',
     borrowDateFrom: '',
     borrowDateTo: '',
   });
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -29,87 +47,95 @@ export default function ReportsPage() {
 
     const userStr = localStorage.getItem('user');
     if (userStr) {
-      const user = JSON.parse(userStr);
-      if (user.role === 'EMPLOYEE') {
+      const parsedUser: User = JSON.parse(userStr);
+      if (parsedUser.role === 'EMPLOYEE') {
         router.push('/dashboard');
         return;
       }
     }
 
-    fetchData();
+    Promise.all([getReports(filters), getUsers(), getVehicles()])
+      .then(([reportData, userData, vehicleData]) => {
+        setBorrows(reportData);
+        setUsers(userData);
+        setVehicles(vehicleData);
+        setInitialized(true);
+      })
+      .catch((error) => {
+        console.error('Failed to load reports:', error);
+        setPageError('ไม่สามารถโหลดรายงานได้ กรุณาลองใหม่อีกครั้ง');
+      })
+      .finally(() => setLoading(false));
   }, [router]);
 
-  const fetchData = async () => {
-    try {
-      const [borrowsData, vehiclesData, usersData] = await Promise.all([
-        getReports(filters),
-        getVehicles(),
-        getUsers(),
-      ]);
-      setBorrows(borrowsData);
-      setVehicles(vehiclesData);
-      setUsers(usersData);
-    } catch (err) {
-      console.error('Failed to fetch data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (loading) return;
-    fetchData();
-  }, [filters]);
+    if (!initialized) return;
 
-  const getVehiclePlate = (vehicleId: string) => {
-    const vehicle = vehicles.find((v) => v.id === vehicleId);
-    return vehicle?.licensePlate || 'N/A';
+    setLoading(true);
+    setPageError(null);
+    getReports(filters)
+      .then((reportData) => {
+        setBorrows(reportData);
+      })
+      .catch((error) => {
+        console.error('Failed to filter reports:', error);
+        setPageError('ไม่สามารถกรองข้อมูลรายงานได้ กรุณาลองใหม่อีกครั้ง');
+      })
+      .finally(() => setLoading(false));
+  }, [filters, initialized]);
+
+  const userMap = useMemo(
+    () =>
+      users.reduce<Record<string, User>>((acc, user) => {
+        acc[user.id] = user;
+        return acc;
+      }, {}),
+    [users]
+  );
+
+  const vehicleMap = useMemo(
+    () =>
+      vehicles.reduce<Record<string, Vehicle>>((acc, vehicle) => {
+        acc[vehicle.id] = vehicle;
+        return acc;
+      }, {}),
+    [vehicles]
+  );
+
+  const totalDistance = useMemo(() => {
+    return borrows.reduce((sum, borrow) => {
+      if (borrow.startMileage && borrow.endMileage) {
+        return sum + (borrow.endMileage - borrow.startMileage);
+      }
+      return sum;
+    }, 0);
+  }, [borrows]);
+
+  const handleFilterChange = (field: keyof ReportFilters, value: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
-
-  const getUserName = (userId: string) => {
-    const user = users.find((u) => u.id === userId);
-    return user?.name || 'N/A';
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'รออนุมัติ';
-      case 'APPROVED':
-        return 'อนุมัติแล้ว';
-      case 'IN_USE':
-        return 'กำลังใช้งาน';
-      case 'RETURNED':
-        return 'คืนแล้ว';
-      default:
-        return status;
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 py-8">Loading...</div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h2 className="text-3xl font-bold mb-6">รายงานการเบิกรถ</h2>
-
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <h3 className="text-lg font-semibold mb-4">ตัวกรอง</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <AppShell
+      title="รายงานการเบิกรถ"
+      description="ตรวจสอบประวัติการเบิกรถทั้งหมด พร้อมกรองข้อมูลตามสถานะและช่วงเวลา"
+    >
+      <div className="space-y-6">
+        <div className="rounded-3xl border border-brand-100 bg-white/90 p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-brand-900">ตัวกรองข้อมูล</h3>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">สถานะ</label>
+              <label htmlFor="status" className="block text-sm font-semibold text-brand-800">
+                สถานะคำขอ
+              </label>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                id="status"
                 value={filters.status}
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                onChange={(event) => handleFilterChange('status', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-sm text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
               >
                 <option value="">ทั้งหมด</option>
                 <option value="PENDING">รออนุมัติ</option>
@@ -119,78 +145,128 @@ export default function ReportsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">วันที่เบิกจาก</label>
+              <label htmlFor="borrowDateFrom" className="block text-sm font-semibold text-brand-800">
+                วันที่เบิก (จาก)
+              </label>
               <input
+                id="borrowDateFrom"
                 type="date"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 value={filters.borrowDateFrom}
-                onChange={(e) => setFilters({ ...filters, borrowDateFrom: e.target.value })}
+                onChange={(event) => handleFilterChange('borrowDateFrom', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-sm text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">วันที่เบิกถึง</label>
+              <label htmlFor="borrowDateTo" className="block text-sm font-semibold text-brand-800">
+                วันที่เบิก (ถึง)
+              </label>
               <input
+                id="borrowDateTo"
                 type="date"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 value={filters.borrowDateTo}
-                onChange={(e) => setFilters({ ...filters, borrowDateTo: e.target.value })}
+                onChange={(event) => handleFilterChange('borrowDateTo', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-sm text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
               />
             </div>
           </div>
         </div>
 
-        {borrows.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-600">
-            ไม่พบข้อมูล
+        <div className="grid gap-4 rounded-3xl border border-brand-100 bg-white/90 p-6 shadow-sm sm:grid-cols-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+              รายการทั้งหมด
+            </p>
+            <p className="mt-1 text-3xl font-semibold text-brand-900">{borrows.length}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+              ระยะทางที่บันทึกได้
+            </p>
+            <p className="mt-1 text-3xl font-semibold text-brand-900">
+              {totalDistance.toLocaleString('th-TH')} กม.
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+              อัปเดตล่าสุด
+            </p>
+            <p className="mt-1 text-base text-brand-600">
+              {borrows.length > 0
+                ? new Date(borrows[0].updatedAt).toLocaleString('th-TH')
+                : '-'}
+            </p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="rounded-3xl border border-dashed border-brand-200 bg-white/80 p-12 text-center text-brand-500">
+            กำลังโหลดข้อมูลรายงาน...
+          </div>
+        ) : pageError ? (
+          <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-700">
+            {pageError}
+          </div>
+        ) : borrows.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-brand-200 bg-white/80 p-12 text-center text-brand-500">
+            ไม่พบข้อมูลตามเงื่อนไขที่เลือก
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="overflow-hidden rounded-3xl border border-brand-100 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-brand-100 text-sm">
+              <thead className="bg-brand-50/70">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ชื่อ
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ทะเบียน
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    วันที่เบิก
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    วันที่คืน
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    สถานะ
-                  </th>
+                  <th className="px-6 py-3 text-left font-semibold text-brand-700">พนักงาน</th>
+                  <th className="px-6 py-3 text-left font-semibold text-brand-700">ทะเบียนรถ</th>
+                  <th className="px-6 py-3 text-left font-semibold text-brand-700">วันที่เบิก</th>
+                  <th className="px-6 py-3 text-left font-semibold text-brand-700">วันที่คืน</th>
+                  <th className="px-6 py-3 text-left font-semibold text-brand-700">เลขไมล์</th>
+                  <th className="px-6 py-3 text-right font-semibold text-brand-700">สถานะ</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {borrows.map((borrow) => (
-                  <tr key={borrow.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getUserName(borrow.userId)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getVehiclePlate(borrow.vehicleId)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(borrow.borrowDate).toLocaleDateString('th-TH')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {borrow.returnDate ? new Date(borrow.returnDate).toLocaleDateString('th-TH') : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getStatusText(borrow.status)}
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-brand-100">
+                {borrows.map((borrow) => {
+                  const user = userMap[borrow.userId];
+                  const vehicle = vehicleMap[borrow.vehicleId];
+                  const meta = statusMeta[borrow.status];
+
+                  return (
+                    <tr key={borrow.id} className="hover:bg-brand-50/40">
+                      <td className="px-6 py-4 text-brand-900">
+                        <div className="font-semibold">{user?.name ?? 'ไม่ทราบชื่อ'}</div>
+                        <div className="text-xs text-brand-500">{user?.employeeId ?? '-'}</div>
+                      </td>
+                      <td className="px-6 py-4 text-brand-900">{vehicle?.licensePlate ?? '-'}</td>
+                      <td className="px-6 py-4 text-brand-700">
+                        {new Date(borrow.borrowDate).toLocaleString('th-TH')}
+                      </td>
+                      <td className="px-6 py-4 text-brand-700">
+                        {borrow.returnDate ? new Date(borrow.returnDate).toLocaleString('th-TH') : '-'}
+                      </td>
+                      <td className="px-6 py-4 text-brand-700">
+                        <div>
+                          <span className="text-xs text-brand-500">เริ่ม</span>{' '}
+                          <span className="font-medium">{borrow.startMileage ?? '-'}</span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-brand-500">คืน</span>{' '}
+                          <span className="font-medium">{borrow.endMileage ?? '-'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}>
+                          {meta.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }
+
 

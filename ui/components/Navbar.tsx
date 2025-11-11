@@ -1,59 +1,77 @@
 'use client';
 
-import { User } from '@/lib/types';
+import type { User } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 
-export default function Navbar() {
+type NavbarProps = {
+  user: User | null;
+  onToggleSidebar?: () => void;
+};
+
+const roleLabels: Record<User['role'], string> = {
+  SUPER_ADMIN: 'ผู้ดูแลระบบ',
+  MANAGER: 'ผู้จัดการ',
+  EMPLOYEE: 'พนักงาน',
+};
+
+export default function Navbar({ user, onToggleSidebar }: NavbarProps) {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
 
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      setUser(JSON.parse(userStr));
+  const userDisplay = useMemo(() => {
+    if (!user) {
+      return {
+        name: 'กำลังโหลดบัญชี...',
+        role: '',
+      };
     }
-  }, []);
+
+    return {
+      name: user.name,
+      role: roleLabels[user.role],
+    };
+  }, [user]);
 
   const handleLogout = () => {
-    console.log('Logging out user');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     router.push('/login');
   };
 
-  const handleBackHome = () => {
-    router.push('/dashboard');
-  }
-
   return (
-    <nav className="bg-blue-600 text-white shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+    <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/90 backdrop-blur">
+      <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-10">
+        <div className="flex items-center gap-3">
           <button
-            className='p-2 bg-red-600'
-            onClick={handleBackHome}> <span className="text-sm text-black">กลับไปหน้าหลัก</span></button>
-          <div className="flex items-center">
-            <h1 className="text-xl font-bold">Creatus Car Service</h1>
-          </div>
-          <div className="flex items-center space-x-4">
-            {user && (
-              <>
-                <span className="text-sm">
-                  {user.name} ({user.role})
-                </span>
-                <button
-                  onClick={handleLogout}
-                  className="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded text-sm"
-                >
-                  ออกจากระบบ
-                </button>
-              </>
-            )}
+            type="button"
+            onClick={onToggleSidebar}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-brand-100 text-brand-700 transition hover:border-brand-200 hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 lg:hidden"
+            aria-label="Toggle navigation"
+          >
+            <span className="text-xl">☰</span>
+          </button>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-brand-500">Creatus Mobility</p>
+            <p className="text-lg font-semibold text-brand-900">Car Service Portal</p>
           </div>
         </div>
+
+        <div className="flex items-center gap-4">
+          <div className="hidden text-right sm:block">
+            <p className="text-sm font-semibold text-brand-900">{userDisplay.name}</p>
+            {userDisplay.role && <p className="text-xs text-brand-500">{userDisplay.role}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2"
+          >
+            ออกจากระบบ
+          </button>
+        </div>
       </div>
-    </nav>
+    </header>
   );
 }
+
 

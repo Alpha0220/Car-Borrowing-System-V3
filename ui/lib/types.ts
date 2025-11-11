@@ -42,3 +42,11 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface VehicleSummary {
+  vehicle: Vehicle;
+  latestBorrow: Borrow | null;
+  latestMileage: number | null;
+  lastUpdatedAt: string;
+}
+
+

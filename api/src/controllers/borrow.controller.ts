@@ -1,18 +1,18 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth';
 import { BorrowRepository } from '../repositories/borrow.repository';
-import { VehicleRepository } from '../repositories/vehicle.repository';
-import { UserRepository } from '../repositories/user.repository';
 import { NotificationRepository } from '../repositories/notification.repository';
-import { LineNotifyService } from '../services/line-notify.service';
+import { UserRepository } from '../repositories/user.repository';
+import { VehicleRepository } from '../repositories/vehicle.repository';
+import { approveBorrowSchema, createBorrowSchema, returnBorrowSchema } from '../schemas/borrow.schema';
 import { GoogleSheetsService } from '../services/google-sheets.service';
-import { createBorrowSchema, approveBorrowSchema, returnBorrowSchema } from '../schemas/borrow.schema';
+import { LineMessagingService } from '../services/line-messaging.service';
 
 const borrowRepo = new BorrowRepository();
 const vehicleRepo = new VehicleRepository();
 const userRepo = new UserRepository();
 const notificationRepo = new NotificationRepository();
-const lineNotify = new LineNotifyService();
+const lineMessaging = new LineMessagingService();
 const googleSheets = new GoogleSheetsService();
 
 export class BorrowController {
@@ -56,13 +56,13 @@ export class BorrowController {
       // Send LINE notification to managers
       const managers = await userRepo.findAll();
       const managerUsers = managers.filter((m) => m.role === 'MANAGER' || m.role === 'SUPER_ADMIN');
-      const lineMessage = lineNotify.formatBorrowRequestMessage(
+      const lineMessage = lineMessaging.formatBorrowRequestMessage(
         user.name,
         user.employeeId,
         licensePlate,
         borrow.borrowDate
       );
-      await lineNotify.sendNotification(lineMessage);
+      await lineMessaging.sendNotification(lineMessage);
 
       res.status(201).json(borrow);
     } catch (error: any) {
@@ -114,8 +114,8 @@ export class BorrowController {
       });
 
       // Send LINE notification
-      const lineMessage = lineNotify.formatApprovalMessage(user.name, vehicle.licensePlate);
-      await lineNotify.sendNotification(lineMessage);
+      const lineMessage = lineMessaging.formatApprovalMessage(user.name, vehicle.licensePlate);
+      await lineMessaging.sendNotification(lineMessage);
 
       res.json(updated);
     } catch (error: any) {
@@ -174,8 +174,8 @@ export class BorrowController {
       });
 
       // Send LINE notification
-      const lineMessage = lineNotify.formatReturnMessage(user.name, vehicle.licensePlate, returnDate);
-      await lineNotify.sendNotification(lineMessage);
+      const lineMessage = lineMessaging.formatReturnMessage(user.name, vehicle.licensePlate, returnDate);
+      await lineMessaging.sendNotification(lineMessage);
 
       // Save to Google Sheets
       await googleSheets.appendRecord({

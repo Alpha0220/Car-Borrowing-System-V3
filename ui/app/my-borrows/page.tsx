@@ -1,20 +1,48 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
-import { getMyBorrows } from '@/lib/actions/borrow.action';
+import AppShell from '@/components/AppShell';
+import { getMyBorrows, returnVehicle } from '@/lib/actions/borrow.action';
 import { getVehicles } from '@/lib/actions/vehicle.action';
-import { returnVehicle } from '@/lib/actions/borrow.action';
-import { Borrow, Vehicle } from '@/lib/types';
+import type { Borrow, Vehicle } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+
+type BorrowFormState = Record<string, string>;
+
+const statusMeta: Record<
+  Borrow['status'],
+  { label: string; badgeClass: string; description: string }
+> = {
+  PENDING: {
+    label: 'รออนุมัติ',
+    badgeClass: 'bg-yellow-100 text-yellow-800',
+    description: 'คำขอถูกส่งแล้ว กรุณารอผู้จัดการอนุมัติ',
+  },
+  APPROVED: {
+    label: 'อนุมัติแล้ว',
+    badgeClass: 'bg-brand-100 text-brand-800',
+    description: 'สามารถนำรถออกใช้งานได้ตามคำขอนี้',
+  },
+  IN_USE: {
+    label: 'กำลังใช้งาน',
+    badgeClass: 'bg-blue-100 text-blue-800',
+    description: 'กำลังใช้งานรถคันนี้อยู่ โปรดบันทึกเลขไมล์ตอนคืนรถ',
+  },
+  RETURNED: {
+    label: 'คืนแล้ว',
+    badgeClass: 'bg-green-100 text-green-800',
+    description: 'คืนรถเรียบร้อยแล้ว ขอบคุณที่ดูแลรถของเรา',
+  },
+};
 
 export default function MyBorrowsPage() {
   const router = useRouter();
   const [borrows, setBorrows] = useState<Borrow[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [returningId, setReturningId] = useState<string | null>(null);
-  const [endMileage, setEndMileage] = useState('');
+  const [formState, setFormState] = useState<BorrowFormState>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -27,149 +55,198 @@ export default function MyBorrowsPage() {
   }, [router]);
 
   const fetchData = async () => {
+    setIsLoading(true);
+    setPageError(null);
+
     try {
-      const [borrowsData, vehiclesData] = await Promise.all([
-        getMyBorrows(),
-        getVehicles(),
-      ]);
-      setBorrows(borrowsData);
-      setVehicles(vehiclesData);
-    } catch (err) {
-      console.error('Failed to fetch data:', err);
+      const [myBorrows, allVehicles] = await Promise.all([getMyBorrows(), getVehicles()]);
+      setBorrows(myBorrows);
+      setVehicles(allVehicles);
+
+      const initialFormState: BorrowFormState = {};
+      myBorrows.forEach((borrow: Borrow) => {
+        const defaultValue =
+          borrow.endMileage?.toString() ??
+          (borrow.startMileage ? borrow.startMileage.toString() : '0');
+        initialFormState[borrow.id] = defaultValue;
+      });
+      setFormState(initialFormState);
+    } catch (error: any) {
+      console.error('Failed to fetch borrow data:', error);
+      setPageError('ไม่สามารถโหลดรายการเบิกรถได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
+  };
+
+  const handleFormChange = (borrowId: string, value: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      [borrowId]: value,
+    }));
   };
 
   const handleReturn = async (borrowId: string) => {
-    if (!endMileage || parseInt(endMileage) <= 0) {
-      alert('กรุณากรอกเลขไมล์ที่ถูกต้อง');
+    const mileageValue = formState[borrowId];
+    if (!mileageValue || Number(mileageValue) <= 0) {
+      alert('กรุณากรอกเลขไมล์คืนที่ถูกต้อง');
       return;
     }
 
-    setReturningId(borrowId);
+    setSubmittingId(borrowId);
     try {
-      await returnVehicle(borrowId, parseInt(endMileage));
-      setEndMileage('');
-      setReturningId(null);
-      fetchData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to return vehicle');
+      await returnVehicle(borrowId, Number(mileageValue));
+      await fetchData();
+    } catch (error: any) {
+      alert(error.message || 'ไม่สามารถบันทึกข้อมูลคืนรถได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
-      setReturningId(null);
+      setSubmittingId(null);
     }
   };
 
-  const getVehiclePlate = (vehicleId: string) => {
-    const vehicle = vehicles.find((v) => v.id === vehicleId);
-    return vehicle?.licensePlate || 'N/A';
-  };
+  const vehicleMap = useMemo(
+    () =>
+      vehicles.reduce<Record<string, Vehicle>>((acc, vehicle) => {
+        acc[vehicle.id] = vehicle;
+        return acc;
+      }, {}),
+    [vehicles]
+  );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'APPROVED':
-      case 'IN_USE':
-        return 'bg-blue-100 text-blue-800';
-      case 'RETURNED':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="rounded-3xl border border-dashed border-brand-200 bg-white/80 p-12 text-center text-brand-500">
+          กำลังโหลดรายการเบิกรถของคุณ...
+        </div>
+      );
     }
-  };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'รออนุมัติ';
-      case 'APPROVED':
-        return 'อนุมัติแล้ว';
-      case 'IN_USE':
-        return 'กำลังใช้งาน';
-      case 'RETURNED':
-        return 'คืนแล้ว';
-      default:
-        return status;
+    if (pageError) {
+      return (
+        <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
+          {pageError}
+        </div>
+      );
     }
-  };
 
-  if (loading) {
+    if (borrows.length === 0) {
+      return (
+        <div className="rounded-3xl border border-dashed border-brand-200 bg-white/80 p-12 text-center text-brand-500">
+          ยังไม่มีคำขอเบิกรถในระบบ เริ่มต้นขอเบิกรถได้จากเมนู “ขอเบิกรถ”
+        </div>
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 py-8">Loading...</div>
-      </div>
-    );
-  }
+      <div className="space-y-6">
+        {borrows.map((borrow) => {
+          const vehicle = vehicleMap[borrow.vehicleId];
+          const status = statusMeta[borrow.status];
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h2 className="text-3xl font-bold mb-6">รายการเบิกรถของฉัน</h2>
-
-        {borrows.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-600">
-            ยังไม่มีรายการเบิกรถ
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {borrows.map((borrow) => (
-              <div key={borrow.id} className="bg-white p-6 rounded-lg shadow-md">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">ทะเบียน: {getVehiclePlate(borrow.vehicleId)}</h3>
-                    <p className="text-sm text-gray-600">
-                      วันที่เบิก: {new Date(borrow.borrowDate).toLocaleString('th-TH')}
+          return (
+            <div
+              key={borrow.id}
+              className="rounded-3xl border border-brand-100 bg-white p-6 shadow-sm transition hover:border-brand-200 hover:shadow-md"
+            >
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                    ทะเบียนรถ
+                  </p>
+                  <h3 className="text-2xl font-semibold text-brand-900">
+                    {vehicle?.licensePlate ?? 'ไม่พบทะเบียน'}
+                  </h3>
+                  <p className="text-sm text-brand-600">
+                    ขอเบิกเมื่อ {new Date(borrow.borrowDate).toLocaleString('th-TH')}
+                  </p>
+                  {borrow.returnDate && (
+                    <p className="text-sm text-brand-600">
+                      คืนรถเมื่อ {new Date(borrow.returnDate).toLocaleString('th-TH')}
                     </p>
-                    {borrow.returnDate && (
-                      <p className="text-sm text-gray-600">
-                        วันที่คืน: {new Date(borrow.returnDate).toLocaleString('th-TH')}
-                      </p>
-                    )}
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(borrow.status)}`}>
-                    {getStatusText(borrow.status)}
+                  )}
+                </div>
+                <div className="rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide">
+                  <span className={`inline-block rounded-full px-3 py-1 ${status.badgeClass}`}>
+                    {status.label}
                   </span>
                 </div>
-
-                {borrow.startMileage && (
-                  <p className="text-sm text-gray-600 mb-2">เลขไมล์เริ่มต้น: {borrow.startMileage.toLocaleString()}</p>
-                )}
-                {borrow.endMileage && (
-                  <p className="text-sm text-gray-600 mb-2">เลขไมล์คืน: {borrow.endMileage.toLocaleString()}</p>
-                )}
-
-                {(borrow.status === 'APPROVED' || borrow.status === 'IN_USE') && (
-                  <div className="mt-4 pt-4 border-t">
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        placeholder="เลขไมล์คืน"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-                        value={returningId === borrow.id ? endMileage : ''}
-                        onChange={(e) => {
-                          setEndMileage(e.target.value);
-                          setReturningId(borrow.id);
-                        }}
-                      />
-                      <button
-                        onClick={() => handleReturn(borrow.id)}
-                        disabled={returningId === borrow.id && !endMileage}
-                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
-                      >
-                        คืนรถ
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
-        )}
+
+              <div className="mt-6 grid gap-4 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                    เลขไมล์เริ่มต้น
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-brand-900">
+                    {borrow.startMileage ? borrow.startMileage.toLocaleString('th-TH') : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                    เลขไมล์คืนล่าสุด
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-brand-900">
+                    {borrow.endMileage ? borrow.endMileage.toLocaleString('th-TH') : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                    น้ำมันที่ใช้ (ลิตร)
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-brand-900">
+                    {borrow.fuelUsedLiters ? Number(borrow.fuelUsedLiters).toLocaleString('th-TH') : '-'}
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-4 text-sm text-brand-600">{status.description}</p>
+
+              {(borrow.status === 'APPROVED' || borrow.status === 'IN_USE') && (
+                <div className="mt-6 border-t border-brand-100 pt-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="flex-1">
+                      <label
+                        htmlFor={`endMileage-${borrow.id}`}
+                        className="block text-sm font-semibold text-brand-800"
+                      >
+                        บันทึกเลขไมล์ตอนคืนรถ
+                      </label>
+                      <input
+                        id={`endMileage-${borrow.id}`}
+                        type="number"
+                        min={0}
+                        value={formState[borrow.id] ?? ''}
+                        onChange={(event) => handleFormChange(borrow.id, event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleReturn(borrow.id)}
+                      disabled={submittingId === borrow.id}
+                      className="w-full rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-200 sm:w-auto"
+                    >
+                      {submittingId === borrow.id ? 'กำลังบันทึก...' : 'บันทึกการคืนรถ'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-    </div>
+    );
+  };
+
+  return (
+    <AppShell
+      title="รายการเบิกรถของฉัน"
+      description="ติดตามสถานะและบันทึกข้อมูลการคืนรถได้จากที่นี่"
+    >
+      {renderContent()}
+    </AppShell>
   );
 }
+
 

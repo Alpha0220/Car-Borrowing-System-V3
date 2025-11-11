@@ -3,7 +3,7 @@ services:
     image: postgres:15
     container_name: creatus_car_db
     ports:
-      - "5432:5432"
+      - '5432:5432'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,17 +22,18 @@ services:
       dockerfile: Dockerfile.dev
     container_name: creatus_car_api
     ports:
-      - "4000:4000"
+      - '4000:4000'
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/creatus_car
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL:-postgresql://postgres:postgres@db:5432/creatus_car}
+      - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN:-}
+      - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET:-}
       - JWT_SECRET=${JWT_SECRET:-jwt-secret-key-999}
       - NODE_ENV=${NODE_ENV:-development}
-      - LINE_NOTIFY_TOKEN=${LINE_NOTIFY_TOKEN:-}
       - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}
       - GOOGLE_SHEETS_SPREADSHEET_ID=${GOOGLE_SHEETS_SPREADSHEET_ID:-}
       - SA_EMPLOYEE_ID=${SA_EMPLOYEE_ID:-SA001}
       - SA_PASSWORD=${SA_PASSWORD:-Creatus@123}
-    command: ["pnpm", "dev"]
+    command: ['pnpm', 'dev']
     depends_on:
       db:
         condition: service_healthy
@@ -46,11 +47,13 @@ services:
       dockerfile: Dockerfile.dev
     container_name: creatus_car_ui
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:4000
-    command: ["pnpm", "dev"]
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    command: ['pnpm', 'dev']
     volumes:
       - ./ui:/app
       - /app/node_modules
@@ -60,4 +63,3 @@ services:
 
 volumes:
   postgres_data:
-

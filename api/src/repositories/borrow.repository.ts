@@ -1,6 +1,6 @@
-import { eq, and, desc, gte, lte } from 'drizzle-orm';
-import { db } from '../config/database';
+import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import { borrows, type Borrow, type NewBorrow } from '../../drizzle/schema';
+import { db } from '../config/database';
 
 export interface BorrowFilters {
   userId?: string;
@@ -44,6 +44,17 @@ export class BorrowRepository {
       .from(borrows)
       .where(eq(borrows.status, 'PENDING'))
       .orderBy(desc(borrows.createdAt));
+  }
+
+  async findLatestByVehicle(vehicleId: string): Promise<Borrow | null> {
+    const result = await db
+      .select()
+      .from(borrows)
+      .where(eq(borrows.vehicleId, vehicleId))
+      .orderBy(desc(borrows.borrowDate))
+      .limit(1);
+
+    return result[0] || null;
   }
 
   async findAllWithFilters(filters: BorrowFilters): Promise<Borrow[]> {

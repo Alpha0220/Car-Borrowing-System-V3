@@ -1,22 +1,49 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import AppShell from '@/components/AppShell';
+import { createVehicle, getVehicles } from '@/lib/actions/vehicle.action';
+import type { User, Vehicle } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
-import { getVehicles, createVehicle } from '@/lib/actions/vehicle.action';
-import { Vehicle } from '@/lib/types';
+import { useEffect, useMemo, useState } from 'react';
+
+type VehicleFormState = {
+  licensePlate: string;
+  easypassBalance: string;
+};
+
+const vehicleStatusMeta: Record<
+  Vehicle['status'],
+  { label: string; badgeClass: string; description: string }
+> = {
+  AVAILABLE: {
+    label: 'พร้อมใช้งาน',
+    badgeClass: 'bg-green-100 text-green-800',
+    description: 'รถคันนี้พร้อมให้เบิกใช้งานได้ทันที',
+  },
+  IN_USE: {
+    label: 'กำลังใช้งาน',
+    badgeClass: 'bg-blue-100 text-blue-800',
+    description: 'กำลังมีการใช้งานอยู่ โปรดตรวจสอบสถานะการคืน',
+  },
+  BROKEN: {
+    label: 'ชำรุด',
+    badgeClass: 'bg-red-100 text-red-800',
+    description: 'อยู่ระหว่างการซ่อมบำรุงหรือไม่พร้อมใช้งาน',
+  },
+};
 
 export default function VehiclesPage() {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formState, setFormState] = useState<VehicleFormState>({
     licensePlate: '',
     easypassBalance: '',
   });
-  const [error, setError] = useState('');
-  const [user, setUser] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -30,175 +57,207 @@ export default function VehiclesPage() {
       setUser(JSON.parse(userStr));
     }
 
-    fetchVehicles();
+    getVehicles()
+      .then((data) => setVehicles(data))
+      .catch((err) => {
+        console.error('Failed to fetch vehicles:', err);
+        setError('ไม่สามารถโหลดรายการรถได้ กรุณาลองใหม่อีกครั้ง');
+      })
+      .finally(() => setLoading(false));
   }, [router]);
 
-  const fetchVehicles = async () => {
-    try {
-      const data = await getVehicles();
-      setVehicles(data);
-    } catch (err) {
-      console.error('Failed to fetch vehicles:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const isManager = useMemo(
+    () => user?.role === 'MANAGER' || user?.role === 'SUPER_ADMIN',
+    [user]
+  );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const availableCount = vehicles.filter((vehicle) => vehicle.status === 'AVAILABLE').length;
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
 
     try {
       await createVehicle({
-        licensePlate: formData.licensePlate,
-        easypassBalance: formData.easypassBalance
-          ? parseFloat(formData.easypassBalance)
-          : undefined,
+        licensePlate: formState.licensePlate,
+        easypassBalance: formState.easypassBalance ? Number(formState.easypassBalance) : undefined,
       });
-      setFormData({ licensePlate: '', easypassBalance: '' });
+      setFormState({ licensePlate: '', easypassBalance: '' });
       setShowForm(false);
-      fetchVehicles();
+      const refreshedVehicles = await getVehicles();
+      setVehicles(refreshedVehicles);
     } catch (err: any) {
-      setError(err.message || 'Failed to create vehicle');
+      setError(err.message || 'ไม่สามารถเพิ่มรถใหม่ได้ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const isManager = user?.role === 'MANAGER' || user?.role === 'SUPER_ADMIN';
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'AVAILABLE':
-        return 'bg-green-100 text-green-800';
-      case 'IN_USE':
-        return 'bg-blue-100 text-blue-800';
-      case 'BROKEN':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'AVAILABLE':
-        return 'พร้อมใช้งาน';
-      case 'IN_USE':
-        return 'กำลังใช้งาน';
-      case 'BROKEN':
-        return 'ชำรุด';
-      default:
-        return status;
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 py-8">Loading...</div>
-      </div>
-    );
-  }
+  const formatCurrency = (value?: string | null) =>
+    Number(value ?? 0).toLocaleString('th-TH', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-bold">สถานะรถและเงิน Easy Pass</h2>
-          {isManager && (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+    <AppShell
+      title="สถานะรถทั้งหมด"
+      description="ตรวจสอบสถานะและยอดเงิน Easy Pass ของรถทุกคันภายในองค์กร"
+      actions={
+        isManager && (
+          <button
+            type="button"
+            onClick={() => setShowForm((prev) => !prev)}
+            className="rounded-xl border border-brand-400 bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2"
+          >
+            {showForm ? 'ปิดฟอร์มเพิ่มรถ' : 'เพิ่มรถคันใหม่'}
+          </button>
+        )
+      }
+    >
+      {loading ? (
+        <div className="rounded-3xl border border-dashed border-brand-200 bg-white/80 p-12 text-center text-brand-500">
+          กำลังโหลดข้อมูลรถ...
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {error && (
+            <div className="rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {showForm && isManager && (
+            <form
+              onSubmit={handleSubmit}
+              className="rounded-3xl border border-brand-100 bg-white/90 p-6 shadow-sm backdrop-blur"
             >
-              {showForm ? 'ยกเลิก' : 'เพิ่มรถ'}
-            </button>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="licensePlate" className="block text-sm font-semibold text-brand-800">
+                    ทะเบียนรถ *
+                  </label>
+                  <input
+                    id="licensePlate"
+                    type="text"
+                    required
+                    value={formState.licensePlate}
+                    onChange={(event) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        licensePlate: event.target.value.toUpperCase(),
+                      }))
+                    }
+                    placeholder="เช่น กข 1234"
+                    className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="easypassBalance"
+                    className="block text-sm font-semibold text-brand-800"
+                  >
+                    ยอดเงิน Easy Pass (ไม่บังคับ)
+                  </label>
+                  <input
+                    id="easypassBalance"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={formState.easypassBalance}
+                    onChange={(event) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        easypassBalance: event.target.value,
+                      }))
+                    }
+                    placeholder="ระบุจำนวนเงินปัจจุบัน"
+                    className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-200"
+                  >
+                    {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกรถคันใหม่'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          <div className="grid gap-4 rounded-3xl border border-brand-100 bg-white/90 p-6 shadow-sm sm:grid-cols-3">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                รถทั้งหมด
+              </p>
+              <p className="text-3xl font-semibold text-brand-900">{vehicles.length}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                พร้อมใช้งาน
+              </p>
+              <p className="text-3xl font-semibold text-brand-900">{availableCount}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                อัปเดตล่าสุด
+              </p>
+              <p className="text-base text-brand-600">
+                {vehicles.length > 0
+                  ? new Date(vehicles[0].updatedAt).toLocaleString('th-TH')
+                  : '-'}
+              </p>
+            </div>
+          </div>
+
+          {vehicles.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-brand-200 bg-white/80 p-12 text-center text-brand-500">
+              ยังไม่มีรายการรถในระบบ
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {vehicles.map((vehicle) => {
+                const meta = vehicleStatusMeta[vehicle.status];
+                return (
+                  <div
+                    key={vehicle.id}
+                    className="flex h-full flex-col rounded-3xl border border-brand-100 bg-white p-6 shadow-sm transition hover:border-brand-200 hover:shadow-md"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                          ทะเบียนรถ
+                        </p>
+                        <h3 className="text-2xl font-semibold text-brand-900">{vehicle.licensePlate}</h3>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}>
+                        {meta.label}
+                      </span>
+                    </div>
+                    <div className="mt-4 space-y-2 text-sm text-brand-600">
+                      <p>
+                        <span className="font-semibold text-brand-800">เงิน Easy Pass:</span>{' '}
+                        {formatCurrency(vehicle.easypassBalance)} บาท
+                      </p>
+                      <p>
+                        <span className="font-semibold text-brand-800">อัปเดตล่าสุด:</span>{' '}
+                        {new Date(vehicle.updatedAt).toLocaleString('th-TH')}
+                      </p>
+                    </div>
+                    <p className="mt-4 text-sm text-brand-500">{meta.description}</p>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
-
-        {showForm && isManager && (
-          <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h3 className="text-lg font-semibold mb-4">เพิ่มรถใหม่</h3>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-                {error}
-              </div>
-            )}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  ทะเบียนรถ *
-                </label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  value={formData.licensePlate}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      licensePlate: e.target.value.toUpperCase(),
-                    })
-                  }
-                  placeholder="เช่น กข 1234"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  เงิน Easy Pass (บาท) (ไม่บังคับ)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  value={formData.easypassBalance}
-                  onChange={(e) =>
-                    setFormData({ ...formData, easypassBalance: e.target.value })
-                  }
-                  placeholder="เช่น 500.00"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700"
-              >
-                เพิ่มรถ
-              </button>
-            </form>
-          </div>
-        )}
-
-        {vehicles.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-600">
-            ยังไม่มีข้อมูลรถ
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vehicles.map((vehicle) => (
-              <div key={vehicle.id} className="bg-white p-6 rounded-lg shadow-md">
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-xl font-semibold">{vehicle.licensePlate}</h3>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(vehicle.status)}`}>
-                    {getStatusText(vehicle.status)}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-gray-600">
-                    <span className="font-medium">เงิน Easy Pass:</span>{' '}
-                    {parseFloat(vehicle.easypassBalance || '0').toLocaleString('th-TH', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}{' '}
-                    บาท
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </AppShell>
   );
 }
+
 

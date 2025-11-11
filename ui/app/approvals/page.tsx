@@ -1,23 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
-import { getPendingBorrows } from '@/lib/actions/borrow.action';
-import { getVehicles } from '@/lib/actions/vehicle.action';
+import AppShell from '@/components/AppShell';
+import { approveBorrow, getPendingBorrows } from '@/lib/actions/borrow.action';
 import { getUsers } from '@/lib/actions/user.action';
-import { approveBorrow } from '@/lib/actions/borrow.action';
-import { Borrow, Vehicle, User } from '@/lib/types';
+import { getVehicleSummary } from '@/lib/actions/vehicle.action';
+import type { Borrow, User, VehicleSummary } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+
+type ApprovalFormState = {
+  startMileage: string;
+  fuelUsedLiters: string;
+};
 
 export default function ApprovalsPage() {
   const router = useRouter();
   const [borrows, setBorrows] = useState<Borrow[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [summaries, setSummaries] = useState<Record<string, VehicleSummary>>({});
+  const [formState, setFormState] = useState<Record<string, ApprovalFormState>>({});
   const [loading, setLoading] = useState(true);
-  const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [startMileage, setStartMileage] = useState('');
-  const [fuelUsedLiters, setFuelUsedLiters] = useState('');
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -28,8 +32,8 @@ export default function ApprovalsPage() {
 
     const userStr = localStorage.getItem('user');
     if (userStr) {
-      const user = JSON.parse(userStr);
-      if (user.role === 'EMPLOYEE') {
+      const parsedUser: User = JSON.parse(userStr);
+      if (parsedUser.role === 'EMPLOYEE') {
         router.push('/dashboard');
         return;
       }
@@ -39,135 +43,256 @@ export default function ApprovalsPage() {
   }, [router]);
 
   const fetchData = async () => {
+    setLoading(true);
+    setPageError(null);
+
     try {
-      const [borrowsData, vehiclesData, usersData] = await Promise.all([
-        getPendingBorrows(),
-        getVehicles(),
-        getUsers(),
-      ]);
+      const [borrowsData, usersData] = await Promise.all([getPendingBorrows(), getUsers()]);
       setBorrows(borrowsData);
-      setVehicles(vehiclesData);
       setUsers(usersData);
-    } catch (err) {
-      console.error('Failed to fetch data:', err);
+
+      const vehicleIds = Array.from(new Set(borrowsData.map((borrow) => borrow.vehicleId)));
+      const summaryEntries = await Promise.all(
+        vehicleIds.map(async (vehicleId) => {
+          const summary: VehicleSummary = await getVehicleSummary(vehicleId);
+          return [vehicleId, summary] as const;
+        })
+      );
+
+      const summaryMap = Object.fromEntries(summaryEntries);
+      setSummaries(summaryMap);
+
+      const initialFormState: Record<string, ApprovalFormState> = {};
+      borrowsData.forEach((borrow) => {
+        const summary = summaryMap[borrow.vehicleId];
+        const defaultMileage = summary?.latestMileage ?? 0;
+        initialFormState[borrow.id] = {
+          startMileage: defaultMileage > 0 ? defaultMileage.toString() : '0',
+          fuelUsedLiters: borrow.fuelUsedLiters ? borrow.fuelUsedLiters.toString() : '',
+        };
+      });
+      setFormState(initialFormState);
+    } catch (error) {
+      console.error('Failed to fetch approval data:', error);
+      setPageError('ไม่สามารถโหลดรายการอนุมัติได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleFormChange = (borrowId: string, field: keyof ApprovalFormState, value: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      [borrowId]: {
+        ...prev[borrowId],
+        [field]: value,
+      },
+    }));
+  };
+
   const handleApprove = async (borrowId: string) => {
-    if (!startMileage || parseInt(startMileage) <= 0) {
-      alert('กรุณากรอกเลขไมล์เริ่มต้นที่ถูกต้อง');
+    const form = formState[borrowId];
+    if (!form || form.startMileage === '' || Number(form.startMileage) < 0) {
+      alert('กรุณาตรวจสอบเลขไมล์เริ่มต้นให้ถูกต้อง');
       return;
     }
 
-    setApprovingId(borrowId);
+    setSubmittingId(borrowId);
     try {
       await approveBorrow(borrowId, {
-        startMileage: parseInt(startMileage),
-        fuelUsedLiters: fuelUsedLiters ? parseFloat(fuelUsedLiters) : undefined,
+        startMileage: Number(form.startMileage),
+        fuelUsedLiters: form.fuelUsedLiters ? Number(form.fuelUsedLiters) : undefined,
       });
-      setStartMileage('');
-      setFuelUsedLiters('');
-      setApprovingId(null);
-      fetchData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to approve borrow');
+      await fetchData();
+    } catch (error: any) {
+      alert(error.message || 'ไม่สามารถอนุมัติคำขอได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
-      setApprovingId(null);
+      setSubmittingId(null);
     }
   };
 
-  const getVehiclePlate = (vehicleId: string) => {
-    const vehicle = vehicles.find((v) => v.id === vehicleId);
-    return vehicle?.licensePlate || 'N/A';
+  const getUserName = (userId: string) => users.find((user) => user.id === userId)?.name ?? 'ไม่ทราบชื่อ';
+
+  const getVehicleLabel = (borrow: Borrow) =>
+    summaries[borrow.vehicleId]?.vehicle.licensePlate ?? 'ไม่พบทะเบียน';
+
+  const emptyStateDescription = useMemo(() => {
+    if (loading) {
+      return 'กำลังเตรียมรายการคำขอที่รออนุมัติ...';
+    }
+
+    if (pageError) {
+      return pageError;
+    }
+
+    return 'ตอนนี้ไม่มีคำขอเบิกรถที่รออนุมัติ';
+  }, [loading, pageError]);
+
+  const formatNumber = (value?: number | string | null) => {
+    if (value === null || value === undefined || value === '') {
+      return '-';
+    }
+    return Number(value).toLocaleString('th-TH');
   };
 
-  const getUserName = (userId: string) => {
-    const user = users.find((u) => u.id === userId);
-    return user?.name || 'N/A';
+  const formatDateTime = (value?: string) => {
+    if (!value) return '-';
+    return new Date(value).toLocaleString('th-TH');
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 py-8">Loading...</div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h2 className="text-3xl font-bold mb-6">อนุมัติคำขอเบิกรถ</h2>
+    <AppShell
+      title="อนุมัติคำขอเบิกรถ"
+      description="ตรวจสอบรายละเอียดรถจากข้อมูลล่าสุดก่อนยืนยันการอนุมัติ เพื่อความถูกต้องและปลอดภัย"
+    >
+      {borrows.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-brand-200 bg-white/80 p-12 text-center text-brand-500">
+          {emptyStateDescription}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {borrows.map((borrow) => {
+            const summary = summaries[borrow.vehicleId];
+            const form = formState[borrow.id];
+            const borrowerName = getUserName(borrow.userId);
 
-        {borrows.length === 0 ? (
-          <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-600">
-            ไม่มีคำขอที่รออนุมัติ
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {borrows.map((borrow) => (
-              <div key={borrow.id} className="bg-white p-6 rounded-lg shadow-md">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold">คำขอจาก: {getUserName(borrow.userId)}</h3>
-                  <p className="text-gray-600">ทะเบียนรถ: {getVehiclePlate(borrow.vehicleId)}</p>
-                  <p className="text-sm text-gray-600">
-                    วันที่ขอ: {new Date(borrow.borrowDate).toLocaleString('th-TH')}
-                  </p>
+            return (
+              <div
+                key={borrow.id}
+                className="rounded-3xl border border-brand-100 bg-white p-6 shadow-sm transition hover:border-brand-200 hover:shadow-md"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-brand-500">
+                      คำขอจาก
+                    </p>
+                    <h3 className="text-2xl font-semibold text-brand-900">{borrowerName}</h3>
+                    <p className="text-sm text-brand-600">
+                      ส่งคำขอเมื่อ {formatDateTime(borrow.borrowDate)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-right">
+                    <p className="text-xs text-brand-500">ทะเบียนรถ</p>
+                    <p className="text-lg font-semibold text-brand-900">{getVehicleLabel(borrow)}</p>
+                  </div>
                 </div>
 
-                <div className="border-t pt-4">
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        เลขไมล์เริ่มต้น *
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        value={approvingId === borrow.id ? startMileage : ''}
-                        onChange={(e) => {
-                          setStartMileage(e.target.value);
-                          setApprovingId(borrow.id);
-                        }}
-                        placeholder="เช่น 50000"
-                      />
+                <div className="mt-6 grid gap-4 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                      ข้อมูลรถล่าสุด
+                    </p>
+                    <p className="text-sm text-brand-600">
+                      สถานะปัจจุบัน:{' '}
+                      <span className="font-semibold text-brand-800">
+                        {summary?.vehicle.status === 'AVAILABLE'
+                          ? 'พร้อมใช้งาน'
+                          : summary?.vehicle.status === 'IN_USE'
+                            ? 'กำลังใช้งาน'
+                            : summary?.vehicle.status === 'BROKEN'
+                              ? 'ชำรุด'
+                              : 'ไม่ทราบ'}
+                      </span>
+                    </p>
+                    <p className="text-sm text-brand-600">
+                      Easy Pass:{' '}
+                      <span className="font-semibold text-brand-800">
+                        {formatNumber(summary?.vehicle.easypassBalance)} บาท
+                      </span>
+                    </p>
+                    <p className="text-sm text-brand-600">
+                      เลขไมล์ล่าสุด:{' '}
+                      <span className="font-semibold text-brand-800">
+                        {formatNumber(summary?.latestMileage)} กม.
+                      </span>
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
+                      ประวัติการใช้งานครั้งล่าสุด
+                    </p>
+                    <p className="text-sm text-brand-600">
+                      เริ่มใช้งาน:{' '}
+                      <span className="font-semibold text-brand-800">
+                        {formatDateTime(summary?.latestBorrow?.borrowDate)}
+                      </span>
+                    </p>
+                    <p className="text-sm text-brand-600">
+                      คืนรถ:{' '}
+                      <span className="font-semibold text-brand-800">
+                        {formatDateTime(summary?.latestBorrow?.returnDate)}
+                      </span>
+                    </p>
+                    <p className="text-sm text-brand-600">
+                      ไมล์ตอนคืน:{' '}
+                      <span className="font-semibold text-brand-800">
+                        {formatNumber(summary?.latestBorrow?.endMileage)} กม.
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 border-t border-brand-100 pt-6">
+                  <div className="grid gap-4 sm:grid-cols-[2fr,1fr]">
+                    <div className="space-y-4">
+                      <div>
+                        <label
+                          htmlFor={`startMileage-${borrow.id}`}
+                          className="block text-sm font-semibold text-brand-800"
+                        >
+                          เลขไมล์เริ่มต้น
+                        </label>
+                        <input
+                          id={`startMileage-${borrow.id}`}
+                          type="number"
+                          min={0}
+                          value={form?.startMileage ?? ''}
+                          onChange={(event) =>
+                            handleFormChange(borrow.id, 'startMileage', event.target.value)
+                          }
+                          className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor={`fuelUsed-${borrow.id}`}
+                          className="block text-sm font-semibold text-brand-800"
+                        >
+                          น้ำมันที่ใช้ (ลิตร)
+                          <span className="ml-1 text-xs font-normal text-brand-500">(ไม่บังคับ)</span>
+                        </label>
+                        <input
+                          id={`fuelUsed-${borrow.id}`}
+                          type="number"
+                          min={0}
+                          step="0.1"
+                          value={form?.fuelUsedLiters ?? ''}
+                          onChange={(event) =>
+                            handleFormChange(borrow.id, 'fuelUsedLiters', event.target.value)
+                          }
+                          className="mt-2 w-full rounded-xl border border-brand-200 bg-white px-4 py-3 text-brand-900 shadow-sm transition focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        น้ำมันที่ใช้ (ลิตร) (ไม่บังคับ)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        value={approvingId === borrow.id ? fuelUsedLiters : ''}
-                        onChange={(e) => {
-                          setFuelUsedLiters(e.target.value);
-                          setApprovingId(borrow.id);
-                        }}
-                        placeholder="เช่น 20.5"
-                      />
+                    <div className="flex flex-col justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleApprove(borrow.id)}
+                        disabled={submittingId === borrow.id}
+                        className="w-full rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-brand-200"
+                      >
+                        {submittingId === borrow.id ? 'กำลังอนุมัติ...' : 'ยืนยันอนุมัติรถคันนี้'}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleApprove(borrow.id)}
-                      disabled={approvingId === borrow.id && (!startMileage || parseInt(startMileage) <= 0)}
-                      className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50"
-                    >
-                      อนุมัติ
-                    </button>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+            );
+          })}
+        </div>
+      )}
+    </AppShell>
   );
 }
+
 

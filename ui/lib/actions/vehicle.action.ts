@@ -23,6 +23,27 @@ export const getVehicles = async () => {
   }
 };
 
+// Get vehicle summary
+export const getVehicleSummary = async (vehicleId: string) => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Token is missing');
+  }
+
+  try {
+    const response = await axios.get(`${API_URL}/api/vehicles/${vehicleId}/summary`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  } catch (err: any) {
+    throw new Error(
+      `Error fetching vehicle summary: ${err.response?.data?.error || err.message}`
+    );
+  }
+};
+
 // Create vehicle
 export const createVehicle = async (formData: {
   licensePlate: string;
