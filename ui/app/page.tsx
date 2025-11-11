@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function Home() {
   const router = useRouter();
@@ -11,7 +11,7 @@ export default function Home() {
     if (token) {
       router.push('/dashboard');
     } else {
-      // router.push('/login');
+      router.push('/login');
       console.log('No token found, would redirect to /login');
     }
   }, [router]);
