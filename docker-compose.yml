@@ -27,6 +27,7 @@ services:
       - SUPABASE_DB_URL=${SUPABASE_DB_URL:-postgresql://postgres:postgres@db:5432/creatus_car}
       - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN:-}
       - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET:-}
+      - LINE_GROUP_ID=${LINE_GROUP_ID:-}
       - JWT_SECRET=${JWT_SECRET:-jwt-secret-key-999}
       - NODE_ENV=${NODE_ENV:-development}
       - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}

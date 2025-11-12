@@ -49,10 +49,10 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
   const badgeLabel = role ? brandBadgeByRole[role] : 'กำลังตรวจสอบสิทธิ์...';
 
   const navContent = (
-    <div className="flex h-full flex-col gap-6 bg-white px-4 py-6">
-      <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3">
-        <p className="text-sm font-semibold text-brand-900">Creatus Car Service</p>
-        <p className="text-xs text-brand-500">{badgeLabel}</p>
+    <div className="flex h-full flex-col gap-6 bg-slate-50/95 px-4 py-6 backdrop-blur">
+      <div className="rounded-3xl border border-white/50 bg-white/80 p-5 shadow-md">
+        <p className="text-sm font-semibold text-slate-900">Creatus Car Service</p>
+        <p className="text-xs text-slate-500">{badgeLabel}</p>
       </div>
 
       <nav className="flex-1 space-y-1">
@@ -65,10 +65,10 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
               href={item.href}
               onClick={onClose}
               className={[
-                'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition',
+                'flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition',
                 isActive
-                  ? 'bg-brand-100 text-brand-900 shadow-sm'
-                  : 'text-brand-600 hover:bg-brand-50 hover:text-brand-800',
+                  ? 'bg-white text-brand-700 shadow-inner ring-1 ring-brand-100'
+                  : 'text-slate-600 hover:bg-white/80 hover:text-slate-900',
               ].join(' ')}
             >
               <span className="text-base">{item.icon}</span>
@@ -78,7 +78,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
         })}
       </nav>
 
-      <div className="rounded-xl border border-dashed border-brand-200 p-4 text-xs text-brand-500">
+      <div className="rounded-3xl border border-dashed border-white/60 bg-white/60 p-4 text-xs text-slate-500 shadow-inner">
         ระบบจะบันทึกข้อมูลการเบิกรถและการคืนรถทุกครั้ง เพื่อให้การอนุมัติและตรวจสอบง่ายขึ้น
       </div>
     </div>
@@ -88,7 +88,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
     <>
       <div
         className={[
-          'fixed inset-0 z-30 bg-black/40 transition-opacity duration-200 lg:hidden',
+          'fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-200 lg:hidden',
           isOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
         ].join(' ')}
         onClick={onClose}
@@ -96,7 +96,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
 
       <aside
         className={[
-          'fixed inset-y-0 left-0 z-40 w-72 transform border-r border-brand-100 bg-white shadow-xl transition-transform duration-200 lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 w-72 transform border-r border-white/20 bg-slate-100/80 shadow-xl backdrop-blur-xl transition-transform duration-200 lg:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         ].join(' ')}
       >

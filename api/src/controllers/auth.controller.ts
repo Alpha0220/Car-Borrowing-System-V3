@@ -4,6 +4,7 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
 import { UserRepository } from '../repositories/user.repository';
 import { loginSchema, registerSchema } from '../schemas/auth.schema';
+import { ZodError } from 'zod';
 
 const userRepo = new UserRepository();
 
@@ -31,8 +32,8 @@ export class AuthController {
       await userRepo.updatePassword(existingUser.id, hashedPassword);
 
       res.status(201).json({ message: 'Registration successful' });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
+    } catch (error) {
+      if (error instanceof ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       console.error('Register error:', error);
@@ -78,8 +79,8 @@ export class AuthController {
           role: user.role,
         },
       });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
+    } catch (error) {
+      if (error instanceof ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       console.error('Login error:', error);
@@ -122,11 +123,9 @@ export class AuthController {
           return res.status(401).json({ error: 'Invalid SA credentials' });
         }
 
-      
-  
         // สร้าง JWT token สำหรับ SA
         const signOptions: SignOptions = {
-          expiresIn: env.jwtExpiresIn as any,
+          expiresIn: env.jwtExpiresIn as SignOptions['expiresIn'],
         };
         const token = jwt.sign(
           {
@@ -182,8 +181,8 @@ export class AuthController {
           role: user.role,
         },
       });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
+    } catch (error) {
+      if (error instanceof ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       console.error('Login error:', error);

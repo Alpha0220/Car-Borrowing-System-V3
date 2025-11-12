@@ -7,6 +7,9 @@ import { VehicleRepository } from '../repositories/vehicle.repository';
 import { approveBorrowSchema, createBorrowSchema, returnBorrowSchema } from '../schemas/borrow.schema';
 import { GoogleSheetsService } from '../services/google-sheets.service';
 import { LineMessagingService } from '../services/line-messaging.service';
+import { env } from '../config/env';
+import { ZodError } from 'zod';
+import type { BorrowFilters } from '../repositories/borrow.repository';
 
 const borrowRepo = new BorrowRepository();
 const vehicleRepo = new VehicleRepository();
@@ -54,19 +57,17 @@ export class BorrowController {
       });
 
       // Send LINE notification to managers
-      const managers = await userRepo.findAll();
-      const managerUsers = managers.filter((m) => m.role === 'MANAGER' || m.role === 'SUPER_ADMIN');
       const lineMessage = lineMessaging.formatBorrowRequestMessage(
         user.name,
         user.employeeId,
         licensePlate,
         borrow.borrowDate
       );
-      await lineMessaging.sendNotification(lineMessage);
+      await lineMessaging.sendNotification(env.lineGroupId, lineMessage);
 
       res.status(201).json(borrow);
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
+    } catch (error) {
+      if (error instanceof ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       console.error('Create borrow error:', error);
@@ -115,11 +116,11 @@ export class BorrowController {
 
       // Send LINE notification
       const lineMessage = lineMessaging.formatApprovalMessage(user.name, vehicle.licensePlate);
-      await lineMessaging.sendNotification(lineMessage);
+      await lineMessaging.sendNotification(env.lineGroupId, lineMessage);
 
       res.json(updated);
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
+    } catch (error) {
+      if (error instanceof ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       console.error('Approve borrow error:', error);
@@ -175,7 +176,7 @@ export class BorrowController {
 
       // Send LINE notification
       const lineMessage = lineMessaging.formatReturnMessage(user.name, vehicle.licensePlate, returnDate);
-      await lineMessaging.sendNotification(lineMessage);
+      await lineMessaging.sendNotification(env.lineGroupId, lineMessage);
 
       // Save to Google Sheets
       await googleSheets.appendRecord({
@@ -187,8 +188,8 @@ export class BorrowController {
       });
 
       res.json(updated);
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
+    } catch (error) {
+      if (error instanceof ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       console.error('Return borrow error:', error);
@@ -218,15 +219,25 @@ export class BorrowController {
 
   async getReports(req: AuthRequest, res: Response) {
     try {
-      const filters: any = {};
+      const filters: BorrowFilters = {};
 
-      if (req.query.userId) filters.userId = req.query.userId as string;
-      if (req.query.vehicleId) filters.vehicleId = req.query.vehicleId as string;
-      if (req.query.status) filters.status = req.query.status as string;
-      if (req.query.borrowDateFrom) filters.borrowDateFrom = new Date(req.query.borrowDateFrom as string);
-      if (req.query.borrowDateTo) filters.borrowDateTo = new Date(req.query.borrowDateTo as string);
-      if (req.query.returnDateFrom) filters.returnDateFrom = new Date(req.query.returnDateFrom as string);
-      if (req.query.returnDateTo) filters.returnDateTo = new Date(req.query.returnDateTo as string);
+      if (typeof req.query.userId === 'string') filters.userId = req.query.userId;
+      if (typeof req.query.vehicleId === 'string') filters.vehicleId = req.query.vehicleId;
+      if (typeof req.query.status === 'string') {
+        filters.status = req.query.status as BorrowFilters['status'];
+      }
+      if (typeof req.query.borrowDateFrom === 'string') {
+        filters.borrowDateFrom = new Date(req.query.borrowDateFrom);
+      }
+      if (typeof req.query.borrowDateTo === 'string') {
+        filters.borrowDateTo = new Date(req.query.borrowDateTo);
+      }
+      if (typeof req.query.returnDateFrom === 'string') {
+        filters.returnDateFrom = new Date(req.query.returnDateFrom);
+      }
+      if (typeof req.query.returnDateTo === 'string') {
+        filters.returnDateTo = new Date(req.query.returnDateTo);
+      }
 
       const borrows = await borrowRepo.findAllWithFilters(filters);
       res.json(borrows);

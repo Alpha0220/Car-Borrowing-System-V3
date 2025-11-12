@@ -24,6 +24,8 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   lineChannelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
   lineChannelSecret: process.env.LINE_CHANNEL_SECRET || '',
+  lineGroupId: process.env.LINE_GROUP_ID || '',
+  approvalsUrl: process.env.APPROVALS_URL || '',
   googleSheetsCredentials: process.env.GOOGLE_SHEETS_CREDENTIALS || '',
   googleSheetsSpreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '',
   nodeEnv: process.env.NODE_ENV || 'development',
