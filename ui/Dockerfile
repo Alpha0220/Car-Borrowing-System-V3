@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -39,4 +39,3 @@ EXPOSE 3000
 ENV PORT 3000
 
 CMD ["node", "server.js"]
-

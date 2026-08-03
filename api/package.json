@@ -13,6 +13,7 @@
     "format:check": "prettier --check \"**/*.{ts,json,md}\"",
     "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "tsx drizzle/migrate.ts",
+    "db:seed": "tsx drizzle/seed.ts",
     "db:studio": "drizzle-kit studio"
   },
   "keywords": [],

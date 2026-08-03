@@ -3,18 +3,32 @@ services:
     image: postgres:15
     container_name: creatus_car_db
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: creatus_car
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-creatus_car}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-creatus_car}"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: creatus_car_pgadmin
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
 
   api:
     build:
@@ -22,10 +36,13 @@ services:
       dockerfile: Dockerfile.dev
     container_name: creatus_car_api
     ports:
-      - "4000:4000"
+      - "${API_PORT:-4000}:${PORT:-4000}"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/creatus_car
+      - CI=${CI:-true}
+      - PORT=${PORT:-4000}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/creatus_car}
       - JWT_SECRET=${JWT_SECRET:-jwt-secret-key-999}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - NODE_ENV=${NODE_ENV:-development}
       - LINE_NOTIFY_TOKEN=${LINE_NOTIFY_TOKEN:-}
       - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}
@@ -46,10 +63,11 @@ services:
       dockerfile: Dockerfile.dev
     container_name: creatus_car_ui
     ports:
-      - "3000:3000"
+      - "${UI_PORT:-3000}:3000"
     environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - CI=${CI:-true}
+      - NODE_ENV=${NODE_ENV:-development}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     command: ["pnpm", "dev"]
     volumes:
       - ./ui:/app
@@ -60,4 +78,4 @@ services:
 
 volumes:
   postgres_data:
-
+  pgadmin_data:
